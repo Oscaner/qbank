@@ -36,7 +36,10 @@ export default class Markji extends MarkjiBase {
       // 13. 案例分析题
       // 21. 英译汉
       // 22. 汉译英
+      // 25. 分析题
       // 27. 分析说明题
+      // 31. 古文背诵题
+      // 32. 释词题
       case 4:
       case 7:
       case 8:
@@ -46,7 +49,10 @@ export default class Markji extends MarkjiBase {
       case 13:
       case 21:
       case 22:
-      case 27: {
+      case 25:
+      case 27:
+      case 31:
+      case 32: {
         output = await this._processTranslate(question, params)
         break
       }
