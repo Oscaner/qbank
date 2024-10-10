@@ -10,7 +10,7 @@
   "dependencies": {
     "@huggingface/inference": "^2.8.1",
     "@langchain/community": "^0.3.4",
-    "@langchain/core": "^0.3.7",
+    "@langchain/core": "^0.3.9",
     "@langchain/ollama": "^0.1.0",
     "@lesjoursfr/html-to-image": "^1",
     "@oclif/core": "^4",
