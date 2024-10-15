@@ -5,6 +5,7 @@ import path from 'node:path'
 import {Bank} from '../../../types/bank.js'
 import {Category} from '../../../types/category.js'
 import {Params} from '../../../types/common.js'
+import {Sheet} from '../../../types/sheet.js'
 import {HashKeyScope, cacheKeyBuilder} from '../common.js'
 import BiguoReal from './biguo-real.js'
 
@@ -12,11 +13,11 @@ export default class BiguoVip extends BiguoReal {
   public static META = {key: path.parse(import.meta.url).name, name: '笔果💯'}
 
   /**
-   * Categories.
+   * Sheet.
    */
-  @Cacheable({cacheKey: cacheKeyBuilder(HashKeyScope.CATEGORIES)})
-  protected async fetchCategories(params: {bank: Bank}): Promise<Category[]> {
-    return [{children: [], count: params.bank.count || 0, id: '0', name: '默认'}]
+  @Cacheable({cacheKey: cacheKeyBuilder(HashKeyScope.SHEETS)})
+  protected async fetchSheet(params: {bank: Bank; category: Category}): Promise<Sheet[]> {
+    return [{count: params.category.count, id: '0', name: '默认'}]
   }
 
   /**
@@ -30,9 +31,8 @@ export default class BiguoVip extends BiguoReal {
    * _biguoQuestionBankParam.
    */
   protected _biguoQuestionBankParam(params?: Params): Record<string, any> {
-    const [provinceId, schoolId, professionId, , courseCode] = params
-      ? params.bank.id.split('|')
-      : [undefined, undefined, undefined]
+    const [provinceId, schoolId, professionId] = params ? params.bank.id.split('|') : [undefined, undefined, undefined]
+    const [, courseCode] = params ? params.category.id.split('|') : [undefined, undefined]
 
     return {
       code: courseCode,

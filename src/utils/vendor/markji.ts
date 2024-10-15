@@ -71,17 +71,12 @@ const _folder = async (
   params: {vendor: Vendor},
   requestConfig: CacheRequestConfig,
 ): Promise<MarkjiFolder> => {
+  await markji.invalidate(HashKeyScope.BANKS)
+
   const vendorMeta = (params.vendor.constructor as typeof Vendor).META
 
   let folders = await markji.banks()
   let folder = find<MarkjiFolder>(folders, vendorMeta.name)
-
-  // check.
-  if (!folder) {
-    await markji.invalidate(HashKeyScope.BANKS)
-    folders = await markji.banks()
-    folder = find<MarkjiFolder>(folders, vendorMeta.name)
-  }
 
   // create.
   if (!folder) {
@@ -108,15 +103,10 @@ const _deck = async (
   params: {bank: Bank},
   requestConfig: CacheRequestConfig,
 ): Promise<Category> => {
+  await markji.invalidate(HashKeyScope.CATEGORIES, {bank: info.folder})
+
   let decks = await markji.categories({bank: info.folder})
   let deck = find<Category>(decks, params.bank.name)
-
-  // check.
-  if (!deck) {
-    await markji.invalidate(HashKeyScope.CATEGORIES, {bank: info.folder})
-    decks = await markji.categories({bank: info.folder})
-    deck = find<Category>(decks, params.bank.name)
-  }
 
   // create.
   if (!deck) {

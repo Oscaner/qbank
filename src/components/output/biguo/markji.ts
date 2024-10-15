@@ -36,7 +36,9 @@ export default class Markji extends MarkjiBase {
       // 11. 计算题
       // 12. 论述题
       // 13. 案例分析题
+      // 14. 综合应用题
       // 16. 材料题
+      // 17. 证明题
       // 18. 词语解释题
       // 19. 应用题
       // 20. 综合题
@@ -64,7 +66,9 @@ export default class Markji extends MarkjiBase {
       case 11:
       case 12:
       case 13:
+      case 14:
       case 16:
+      case 17:
       case 18:
       case 19:
       case 20:

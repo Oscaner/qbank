@@ -34,13 +34,17 @@ export default class Markji extends Vendor {
       throw new Error(response.data.errors)
     }
 
-    return lodash.map(response.data.data.folders, (item) => ({
-      id: item.id,
-      items: item.items,
-      key: item.id,
-      name: item.name,
-      updated_time: item.updated_time,
-    }))
+    return lodash
+      .chain(response.data.data.folders)
+      .filter((item) => item.name !== 'root')
+      .map((item) => ({
+        id: item.id,
+        items: item.items,
+        key: item.id,
+        name: item.name,
+        updated_time: item.updated_time,
+      }))
+      .value()
   }
 
   /**
