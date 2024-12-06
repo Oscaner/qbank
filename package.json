@@ -29,7 +29,7 @@
     "axios-cache-interceptor": "^1",
     "axios-retry": "^4",
     "better-sqlite3": "^11",
-    "cache-manager": "^5",
+    "cache-manager": "^6",
     "chunk": "^0",
     "cli-progress": "^3",
     "crypto-js": "^4.2.0",
