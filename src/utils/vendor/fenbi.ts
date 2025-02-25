@@ -1,6 +1,6 @@
 import lodash from 'lodash'
 
-import {isJSON, throwError} from '../index.js'
+import {handleImageSrc, isJSON, throwError} from '../index.js'
 import puppeteer from '../puppeteer.js'
 
 const PUBLIC_KEY =
@@ -31,6 +31,20 @@ const encrypt = async (data1: any | null, data2: any | null): Promise<null | str
   return encrypt as string
 }
 
+const srcHandler = (src: string): string | string[] => {
+  const srcs = []
+
+  if (src.startsWith('/api/planet/accessories')) {
+    srcs.push('https://fb.fenbike.cn' + src, 'https://fb.fbstatic.cn' + src)
+  } else if (src.startsWith('//')) {
+    srcs.push('https:' + src)
+  } else {
+    srcs.push(src)
+  }
+
+  return srcs
+}
+
 const parseDoc = async (str: string | undefined): Promise<string> => {
   if (lodash.isUndefined(str)) return ''
 
@@ -44,6 +58,7 @@ const parseDoc = async (str: string | undefined): Promise<string> => {
     case 'b':
     case 'i':
     case 'p':
+    case 'phrase':
     case 'u':
     case 'ud': {
       elements.push(`<${data.name}>`)
@@ -117,7 +132,9 @@ const parseDoc = async (str: string | undefined): Promise<string> => {
     }
 
     case 'tex': {
-      elements.push(`<img src="https://fb.fenbike.cn/api/planet/accessories/formulas?latex=${data.value}" />`)
+      const src = await handleImageSrc(`/api/planet/accessories/formulas?latex=${data.value}`, srcHandler)
+
+      elements.push(`<img src="${src}" />`)
 
       break
     }
@@ -136,4 +153,4 @@ const parseDoc = async (str: string | undefined): Promise<string> => {
   return elements.join('')
 }
 
-export default {encrypt, parseDoc, PUBLIC_KEY}
+export default {encrypt, parseDoc, PUBLIC_KEY, srcHandler}

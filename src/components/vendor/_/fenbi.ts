@@ -22,7 +22,10 @@ import axios from '../../axios/index.js'
 import {CACHE_KEY_ORIGIN_QUESTION_ITEM, CACHE_KEY_ORIGIN_QUESTION_PROCESSING} from '../../cache-pattern.js'
 import {OutputClass} from '../../output/common.js'
 import Markji from '../../output/fenbi/markji.js'
+import Skip from '../../output/skip.js'
 import {cacheKeyBuilder, HashKeyScope, Vendor} from '../common.js'
+
+const INTERVAL_EXERCISE = 20_000
 
 /**
  * Fenbi base.
@@ -31,6 +34,7 @@ export default class Fenbi extends Vendor {
   public get allowedOutputs(): Record<string, OutputClass> {
     return {
       [Markji.META.key]: Markji,
+      [Skip.META.key]: Skip,
     }
   }
 
@@ -50,6 +54,12 @@ export default class Fenbi extends Vendor {
     const cacheClient = this.getCacheClient()
     const config = await this.login()
     const bankPrefix = qbank.bank.meta?.bankPrefix
+
+    if (bankPrefix === 'gwyms') {
+      // TODO: gwyms
+      emitter.closeListener('questions.fetch.count')
+      return
+    }
 
     // cache key.
     const cacheKeyParams = {
@@ -82,19 +92,25 @@ export default class Fenbi extends Vendor {
     // ###########################################
     // customize exercises.
     //
-    if (
-      doneQIds.length < qbank.sheet.count &&
-      // giant questions.
-      qbank.sheet.meta?.giantOnly
-    ) {
-      const exerciseResponse = await axios.get(
+    if (doneQIds.length < qbank.sheet.count && qbank.sheet.meta?.giantOnly) {
+      // sleep to avoid frequent creation.
+      const latestCreateTime = await memory.cache.get<number>('exercise:latest:createTime')
+
+      if (latestCreateTime) {
+        const diff = Date.now() - latestCreateTime
+        if (diff < INTERVAL_EXERCISE) await sleep(INTERVAL_EXERCISE - diff)
+      }
+
+      const exerResp = await axios.get(
         lodash.template(this.apiDelegate.GetGiantsApi)({bankPrefix}),
         lodash.merge({}, config, {
           params: {keypointId: qbank.sheet.meta?.id || qbank.category.meta?.id},
         }),
       )
 
-      for (const [_idx, _questionsIds] of lodash.chunk(exerciseResponse.data, 100).entries()) {
+      await memory.cache.set('exercise:latest:createTime', Date.now())
+
+      for (const [_idx, _questionsIds] of lodash.chunk(exerResp.data, 100).entries()) {
         const _exerciseId = `_${_idx}`
 
         await cacheClient.set(
@@ -134,14 +150,24 @@ export default class Fenbi extends Vendor {
       }
       // 历年真题: fenbi-yy46j.
       else if (this.getVendorKey() === 'fenbi-yy46j' && qbank.bank.meta?.category?.id === md5('历年真题')) {
-        const exerciseResponse = await axios.post(
+        // sleep to avoid frequent creation.
+        const latestCreateTime = await memory.cache.get<number>('exercise:latest:createTime')
+
+        if (latestCreateTime) {
+          const diff = Date.now() - latestCreateTime
+          if (diff < INTERVAL_EXERCISE) await sleep(INTERVAL_EXERCISE - diff)
+        }
+
+        const exerResp = await axios.post(
           lodash.template(this.apiDelegate.CreatePaperExerciseApi)({bankPrefix}),
           undefined,
           lodash.merge({}, config, {params: {paperId: qbank.sheet.meta?.id, type: 1}}),
         )
 
-        _exerId = String(exerciseResponse.data.id)
-        _qIds = lodash.get(exerciseResponse.data, 'sheet.questionIds', [])
+        await memory.cache.set('exercise:latest:createTime', Date.now())
+
+        _exerId = String(exerResp.data.id)
+        _qIds = lodash.get(exerResp.data, 'sheet.questionIds', [])
       }
       // 历年真题: common.
       else if (qbank.category.id === md5('历年真题')) {
@@ -166,13 +192,23 @@ export default class Fenbi extends Vendor {
         }
 
         if (lodash.isNil(paper.exercise?.id)) {
-          const exerciseResponse = await axios.post(
+          // sleep to avoid frequent creation.
+          const latestCreateTime = await memory.cache.get<number>('exercise:latest:createTime')
+
+          if (latestCreateTime) {
+            const diff = Date.now() - latestCreateTime
+            if (diff < INTERVAL_EXERCISE) await sleep(INTERVAL_EXERCISE - diff)
+          }
+
+          const exerResp = await axios.post(
             lodash.template(this.apiDelegate.CreateExerciseApi)({bankPrefix}),
             undefined,
             lodash.merge({}, config, {params: {paperId: paper.id, type: 1}}),
           )
 
-          paper.exercise = exerciseResponse.data
+          await memory.cache.set('exercise:latest:createTime', Date.now())
+
+          paper.exercise = exerResp.data
         }
 
         _exerId = String(paper.exercise.id)
@@ -194,17 +230,24 @@ export default class Fenbi extends Vendor {
             _qIds = [String(zhyynl.questionId)]
           } else if (zhyynl.sheetId) {
             try {
-              // 您创建练习的频率过高，请稍候再试
-              await sleep(1000)
+              // sleep to avoid frequent creation.
+              const latestCreateTime = await memory.cache.get<number>('exercise:latest:createTime')
 
-              const exerciseResponse = await axios.post(
+              if (latestCreateTime) {
+                const diff = Date.now() - latestCreateTime
+                if (diff < INTERVAL_EXERCISE) await sleep(INTERVAL_EXERCISE - diff)
+              }
+
+              const exerResp = await axios.post(
                 lodash.template(this.apiDelegate.CreateExerciseApi)({bankPrefix}),
                 undefined,
                 lodash.merge({}, config, {params: {sheetId: zhyynl.sheetId, type: 26}}),
               )
 
-              _exerId = lodash.get(exerciseResponse.data, 'id', 0)
-              _qIds = lodash.get(exerciseResponse.data, 'sheet.questionIds', [])
+              await memory.cache.set('exercise:latest:createTime', Date.now())
+
+              _exerId = lodash.get(exerResp.data, 'id', 0)
+              _qIds = lodash.get(exerResp.data, 'sheet.questionIds', [])
             } catch {
               _exerId = '_0'
               _qIds = [String(zhyynl.questionId)]
@@ -231,12 +274,12 @@ export default class Fenbi extends Vendor {
           _exerId = String(unfinished.data.exerciseId)
           _qIds = []
         } else {
-          // sleep 30s to avoid frequent creation.
+          // sleep to avoid frequent creation.
           const latestCreateTime = await memory.cache.get<number>('exercise:latest:createTime')
 
           if (latestCreateTime) {
             const diff = Date.now() - latestCreateTime
-            if (diff < 20_000) await sleep(20_000 - diff)
+            if (diff < INTERVAL_EXERCISE) await sleep(INTERVAL_EXERCISE - diff)
           }
 
           const postData: Record<string, any> = {}
@@ -269,7 +312,6 @@ export default class Fenbi extends Vendor {
               throw error
             })
 
-          // sleep 30s to avoid frequent creation.
           await memory.cache.set('exercise:latest:createTime', Date.now())
 
           if (lodash.isBoolean(exerResp)) {
@@ -576,22 +618,46 @@ export default class Fenbi extends Vendor {
     // keypoint. 考点
     const catApiParams = this.apiDelegate.ApiParams
 
-    if (bankPrefix === 'sydwms') {
-      catApiParams.filter = 'giant'
-    }
-
     let _endpoint = this.apiDelegate.GetCategoriesApi
+    let dataPath = 'data'
 
-    if (bankPrefix === 'zhyynl') {
-      _endpoint = this.apiDelegate.GetEtRuleApi!
-    } else if (bankPrefix === 'shenlun') {
-      _endpoint = this.apiDelegate.GetPdpgApi!
+    switch (bankPrefix) {
+      // 公务员面试
+      case 'gwyms': {
+        _endpoint = this.apiDelegate.GetHomeCategoriesApi!
+        catApiParams.filter = 'giant'
+        catApiParams.cquiz = qbank.bank.meta?.quizId
+        dataPath = 'data.data.baseKeypointVOS'
+        break
+      }
+
+      // 申论
+      case 'shenlun': {
+        _endpoint = this.apiDelegate.GetPdpgApi!
+
+        break
+      }
+
+      // 事业单位面试
+      case 'sydwms': {
+        catApiParams.filter = 'giant'
+        break
+      }
+
+      case 'zhyynl': {
+        _endpoint = this.apiDelegate.GetEtRuleApi!
+        break
+      }
     }
 
     const response = await axios.get(
       lodash.template(_endpoint)({bankPrefix}),
       lodash.merge({}, config, {cache: false, params: catApiParams}),
     )
+
+    if (lodash.isArray(response.data?.datas)) {
+      dataPath = 'data.datas'
+    }
 
     const _convert = async (index: number, category: Record<string, any>): Promise<Category> => {
       const children = [] as Category[]
@@ -610,7 +676,7 @@ export default class Fenbi extends Vendor {
       }
     }
 
-    for (const child of lodash.isArray(response.data) ? response.data : response.data.datas) {
+    for (const child of lodash.get(response, dataPath)) {
       categories.push(await _convert(categories.length, child))
     }
 
