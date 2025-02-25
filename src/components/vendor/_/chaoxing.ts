@@ -57,24 +57,26 @@ export default class ChaoXing extends Vendor {
         const clazzName = li.querySelector('div.course-info > p.overHidden1')?.textContent.replace('班级：', '').trim()
 
         const courseId = li.querySelector('div.course-cover > input.courseId')?.getAttribute('value')
-        const courseName = li.querySelector('div.course-info > h3 > a')?.textContent.trim()
+        const courseName = li.querySelector('div.course-info > h3 span.course-name')?.textContent.trim()
 
         const courseUrl = li.querySelector('div.course-info > h3 > a')?.getAttribute('href')
 
         const courseTeacher = li.querySelector('div.course-info > p.line2.color3')?.textContent.trim()
 
-        const courseView = await axios.get(
-          courseUrl!,
-          lodash.merge({}, config, {
-            params: {
-              // catalogId: 0,
-              // size: 500,
-              // start: 0,
-              // superstarClass: 0,
-              // v: Date.now(),
-            },
-          }),
-        )
+        const courseView = courseUrl
+          ? await axios.get(
+              courseUrl,
+              lodash.merge({}, config, {
+                params: {
+                  // catalogId: 0,
+                  // size: 500,
+                  // start: 0,
+                  // superstarClass: 0,
+                  // v: Date.now(),
+                },
+              }),
+            )
+          : {data: ''}
 
         const root = parse(courseView.data)
 
@@ -83,13 +85,26 @@ export default class ChaoXing extends Vendor {
         const workEnc = root.querySelector('input#workEnc')?.getAttribute('value')
         const examEnc = root.querySelector('input#examEnc')?.getAttribute('value')
 
-        return {clazzId, clazzName, courseId, courseName, courseTeacher, courseUrl, cpi, examEnc, openc, workEnc}
+        return {
+          clazzId,
+          clazzName,
+          courseId,
+          courseName,
+          courseTeacher,
+          courseUrl,
+          cpi,
+          examEnc,
+          openc,
+          workEnc,
+        }
       }),
     )
 
     const banks = [] as Bank[]
 
     for (const course of courses) {
+      if (!course) continue
+
       banks.push({
         id: md5(JSON.stringify([course.clazzId, course.courseId])),
         meta: course,

@@ -11,7 +11,9 @@ type ApiDelegate = {
   GetExerciseApi: string
   GetExerciseUnfinishedApi: string
   GetFavoriteQuizListApi: string
+  GetGiantPageSolutionApi?: string
   GetGiantsApi?: string
+  GetHomeCategoriesApi?: string
   GetLabelsApi?: string
   GetMaterialsApi?: string
   GetPaperListApi: string

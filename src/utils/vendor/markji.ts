@@ -24,10 +24,21 @@ import html from '../html.js'
 import {find, safeName, throwError} from '../index.js'
 
 const ensureContact = async (markji: {deck: Deck; folder: Folder; vendor: Markji}, config: CacheRequestConfig) => {
-  await markji.vendor.invalidate(HashKeyScope.SHEETS, markji)
+  const get = async (clean: boolean = false): Promise<[Chapter[], Chapter]> => {
+    if (clean) {
+      await markji.vendor.invalidate(HashKeyScope.SHEETS, markji)
+    }
 
-  const chapters = await markji.vendor.chapters({deck: markji.deck, folder: markji.folder})
-  const defaultChapter = find<Chapter>(chapters, '默认章节') as Chapter
+    const chapters = await markji.vendor.chapters(markji)
+    const chapter = lodash.find(chapters, {name: '默认章节'}) as Chapter
+
+    return [chapters, chapter]
+  }
+
+  let [, defaultChapter] = await get()
+
+  if (!defaultChapter) [, defaultChapter] = await get(true)
+
   const cardId = defaultChapter.meta.cardIds?.[0]
 
   const content = [
@@ -67,26 +78,38 @@ const ensureContact = async (markji: {deck: Deck; folder: Folder; vendor: Markji
 const _folder = async (
   markji: {vendor: Markji},
   qbank: {vendor: Vendor},
-  requestConfig: CacheRequestConfig,
+  config: CacheRequestConfig,
 ): Promise<Folder> => {
-  await markji.vendor.invalidate(HashKeyScope.BANKS)
-
   const vendorMeta = (qbank.vendor.constructor as typeof Vendor).META
 
-  let folders = await markji.vendor.folders()
-  let folder = find<Folder>(folders, vendorMeta.name)
+  const get = async (clean: boolean = false): Promise<[Folder[], Folder]> => {
+    if (clean) {
+      await markji.vendor.invalidate(HashKeyScope.BANKS)
+    }
+
+    const folders = await markji.vendor.folders()
+    const folder = lodash.find(folders, {name: vendorMeta.name}) as Folder
+
+    return [folders, folder]
+  }
+
+  let [folders, folder] = await get()
+
+  if (!folder) {
+    // invalidate.
+    ;[folders, folder] = await get(true)
+  }
 
   // create.
   if (!folder) {
     await axios.post(
       'https://www.markji.com/api/v1/decks/folders',
       {name: vendorMeta.name, order: folders.length},
-      lodash.merge({}, requestConfig, {cache: false}),
+      lodash.merge({}, config, {cache: false}),
     )
 
-    await markji.vendor.invalidate(HashKeyScope.BANKS)
-    folders = await markji.vendor.folders()
-    folder = find<Folder>(folders, vendorMeta.name) as Folder
+    // invalidate.
+    ;[folders, folder] = await get(true)
   }
 
   return folder
@@ -98,16 +121,30 @@ const _folder = async (
 const _deck = async (
   markji: {folder: Folder; vendor: Markji},
   qbank: {bank: Bank; vendor: Vendor},
-  requestConfig: CacheRequestConfig,
-): Promise<Category> => {
-  await markji.vendor.invalidate(HashKeyScope.CATEGORIES, markji)
-
+  config: CacheRequestConfig,
+): Promise<Deck> => {
   const vendorMeta = (qbank.vendor.constructor as typeof Vendor).META
-  let decks = await markji.vendor.decks({folder: markji.folder})
-  let deck = lodash.find(decks, (deck) => {
-    // && deck.meta?.description === vendorMeta.key
-    return deck.name === qbank.bank.name
-  })
+
+  const get = async (clean: boolean = false): Promise<[Deck[], Deck]> => {
+    if (clean) {
+      await markji.vendor.invalidate(HashKeyScope.CATEGORIES, markji)
+    }
+
+    const decks = await markji.vendor.decks({folder: markji.folder})
+    const deck = lodash.find(decks, {
+      // meta: {description: vendorMeta.key},
+      name: qbank.bank.name,
+    }) as Deck
+
+    return [decks, deck]
+  }
+
+  let [decks, deck] = await get()
+
+  if (!deck) {
+    // invalidate.
+    ;[decks, deck] = await get(true)
+  }
 
   // create.
   if (!deck) {
@@ -120,13 +157,11 @@ const _deck = async (
         name: qbank.bank.name,
         order: decks.length,
       },
-      lodash.merge({}, requestConfig, {cache: false}),
+      lodash.merge({}, config, {cache: false}),
     )
 
-    await markji.vendor.invalidate(HashKeyScope.CATEGORIES, markji)
-
-    decks = await markji.vendor.decks({folder: markji.folder})
-    deck = find<Category>(decks, qbank.bank.name) as Category
+    // invalidate.
+    ;[decks, deck] = await get(true)
   }
 
   // update description.
@@ -134,16 +169,18 @@ const _deck = async (
     await axios.post(
       `https://www.markji.com/api/v1/decks/${deck.id}`,
       {description: vendorMeta.key, is_private: deck.meta?.is_private, name: deck.name},
-      requestConfig,
+      config,
     )
 
-    await markji.vendor.invalidate(HashKeyScope.CATEGORIES, markji)
-
-    decks = await markji.vendor.decks({folder: markji.folder})
-    deck = find<Category>(decks, qbank.bank.name) as Category
+    // invalidate.
+    ;[decks, deck] = await get(true)
   }
 
   // sort.
+  if (deck.order !== qbank.bank.order) {
+    ;[decks, deck] = await get(true)
+  }
+
   if (deck.order !== qbank.bank.order) {
     markji.folder = lodash.find(await markji.vendor.folders(), {id: markji.folder.id}) as Folder
 
@@ -166,13 +203,11 @@ const _deck = async (
           .value(),
         updated_time: markji.folder.meta?.updated_time,
       },
-      lodash.merge({}, requestConfig, {cache: false}),
+      lodash.merge({}, config, {cache: false}),
     )
 
-    await markji.vendor.invalidate(HashKeyScope.CATEGORIES, markji)
-
-    decks = await markji.vendor.decks({folder: markji.folder})
-    deck = find<Category>(decks, qbank.bank.name) as Category
+    // invalidate.
+    ;[decks, deck] = await get(true)
   }
 
   return deck
@@ -192,12 +227,24 @@ const _chapter = async (
   qbank: {bank: Bank; category: Category; sheet: Sheet; vendor: Vendor},
   config: CacheRequestConfig,
 ): Promise<Chapter> => {
-  await markji.vendor.invalidate(HashKeyScope.SHEETS, markji)
+  const get = async (clean: boolean = false): Promise<[string, Chapter[], Chapter]> => {
+    if (clean) {
+      await markji.vendor.invalidate(HashKeyScope.SHEETS, markji)
+    }
 
-  const chapterName = await _chapterName(qbank)
+    const chapters = await markji.vendor.chapters(markji)
+    const chapterName = await _chapterName(qbank)
+    const chapter = lodash.find(chapters, {name: chapterName}) as Chapter
 
-  let chapters = (await markji.vendor.chapters(markji)) as Chapter[]
-  let chapter = find<Chapter>(chapters, chapterName)
+    return [chapterName, chapters, chapter]
+  }
+
+  let [chapterName, chapters, chapter] = await get()
+
+  if (!chapter) {
+    // invalidate.
+    ;[chapterName, chapters, chapter] = await get(true)
+  }
 
   // create.
   if (!chapter) {
@@ -207,10 +254,8 @@ const _chapter = async (
       lodash.merge({}, config, {cache: false}),
     )
 
-    await markji.vendor.invalidate(HashKeyScope.SHEETS, markji)
-
-    chapters = (await markji.vendor.chapters(markji)) as Chapter[]
-    chapter = find<Chapter>(chapters, chapterName) as Chapter
+    // invalidate.
+    ;[chapterName, chapters, chapter] = await get(true)
   }
 
   // sort.
@@ -224,6 +269,10 @@ const _chapter = async (
 
     const _sheets = await qbank.vendor.sheets({bank: qbank.bank, category: _category}, {excludeTtl: true})
     _paramSheetOrder += _sheets.length
+  }
+
+  if (chapter.order !== _paramSheetOrder) {
+    ;[chapterName, chapters, chapter] = await get(true)
   }
 
   if (chapter.order !== _paramSheetOrder) {
@@ -249,10 +298,8 @@ const _chapter = async (
       lodash.merge({}, config, {cache: false}),
     )
 
-    await markji.vendor.invalidate(HashKeyScope.SHEETS, markji)
-
-    chapters = (await markji.vendor.chapters(markji)) as Chapter[]
-    chapter = find<Chapter>(chapters, chapterName) as Chapter
+    // invalidate.
+    ;[chapterName, chapters, chapter] = await get(true)
   }
 
   return chapter
@@ -402,7 +449,8 @@ const bulkUpload = async (options: BulkUploadOptions): Promise<void> => {
 
       // emit.
       emitter.emit('output.upload.count', _questionIdx + 1)
-      // await sleep(500)
+
+      await sleep(500)
     }
   }
 
@@ -438,7 +486,16 @@ const upload = async (markji: MarkjiParams, index: number, question: AssetString
         filename,
       })
 
+      const latestUploadTime = await memory.cache.get<number>('markji:latestUploadTime')
+
+      if (latestUploadTime) {
+        const diff = Date.now() - latestUploadTime
+        if (diff < 1500) await sleep(1500 - diff)
+      }
+
       const response = await axios.post('https://www.markji.com/api/v1/files', form, markji.config)
+
+      await memory.cache.set('markji:latestUploadTime', Date.now())
 
       if (response.data.data.file.mime.startsWith('image')) {
         question.assets[key] = `[Pic#ID/${response.data.data.file.id}#]`

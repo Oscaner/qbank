@@ -1,6 +1,7 @@
 import {Cacheable, CacheKeyBuilder} from '@type-cacheable/core'
 import type {CacheRequestConfig} from 'axios-cache-interceptor'
 import lodash from 'lodash'
+import sleep from 'sleep-promise'
 
 import {Bank} from '../../@types/bank.js'
 import {Category} from '../../@types/category.js'
@@ -202,6 +203,7 @@ abstract class Vendor extends Component {
     let cacheClient = this.getCacheClient()
     if (scope === HashKeyScope.LOGIN) cacheClient = cacheManager.CommonClient
     await cacheClient.delHash(cacheKey)
+    await sleep(1000)
   }
 
   /**

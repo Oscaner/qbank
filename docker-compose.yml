@@ -1,11 +1,12 @@
 services:
   cache:
-    image: pgvector/pgvector:pg17
+    image: pgvector/pgvector:pg16
     container_name: qbank-cache
     environment:
       - POSTGRES_USER=qbank
       - POSTGRES_PASSWORD=qbank
       - POSTGRES_DB=qbank
+      - POSTGRES_MAX_CONNECTIONS=100
     ports:
       - 15432:5432
     volumes:

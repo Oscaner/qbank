@@ -35,9 +35,10 @@ const browser = async (create: boolean = true) => {
 
   if ((!_browser || !_browser.connected) && create) {
     _browser = await puppeteer.launch({
-      // args: ['--auto-open-devtools-for-tabs'],
+      // HttpsUpgrades
+      args: ['--disable-features=HttpsUpgrades'],
       // devtools: true,
-      headless: true,
+      headless: false,
       protocolTimeout: 10 * 60 * 1000,
     })
     await memory.cache.set(cacheKey, _browser)
