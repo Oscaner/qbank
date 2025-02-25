@@ -57,11 +57,26 @@ const setup = (axios: AxiosInstance): AxiosInstance => {
     },
     async (error) => {
       if (error.status === 302) {
+        const {response} = error
+
+        // store cookies to jar.
+        for (const c of response.headers['set-cookie'] ?? []) {
+          const _cookie = Cookie.parse(c) as Cookie
+
+          const _url = new URL(response.headers.location)
+          _cookie.domain = _cookie.domain || _url.hostname
+          _cookie.path = _cookie.path || _url.pathname || '/'
+
+          jar.setCookieSync(_cookie, `https://${_cookie.domain}${_cookie.path}`)
+        }
+
         const _nextConfig = lodash.merge({}, error.config, {
           headers: {Cookie: jar.getCookieStringSync(error.config.url!)},
-          url: error.response.headers.location,
+          url: response.headers.location,
         })
+
         const resp = await axios.request(_nextConfig)
+
         return resp
       }
 

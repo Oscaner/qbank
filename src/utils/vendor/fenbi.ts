@@ -1,5 +1,6 @@
 import lodash from 'lodash'
 
+import axios from '../../components/axios/index.js'
 import {isJSON, throwError} from '../index.js'
 import puppeteer from '../puppeteer.js'
 
@@ -44,6 +45,7 @@ const parseDoc = async (str: string | undefined): Promise<string> => {
     case 'b':
     case 'i':
     case 'p':
+    case 'phrase':
     case 'u':
     case 'ud': {
       elements.push(`<${data.name}>`)
@@ -117,7 +119,29 @@ const parseDoc = async (str: string | undefined): Promise<string> => {
     }
 
     case 'tex': {
-      elements.push(`<img src="https://fb.fenbike.cn/api/planet/accessories/formulas?latex=${data.value}" />`)
+      const srcs = [
+        `https://fb.fenbike.cn/api/planet/accessories/formulas?latex=${data.value}`,
+        `https://fb.fbstatic.cn/api/planet/accessories/formulas?latex=${data.value}`,
+      ]
+
+      let src = lodash.find(
+        await Promise.all(
+          lodash.map(srcs, async (src) =>
+            axios
+              .get(src, {responseType: 'arraybuffer'})
+              .then(() => src)
+              .catch(() => {
+                console.warn(`tex not found: ${src}`)
+                return false
+              }),
+          ),
+        ),
+        (src) => src,
+      )
+
+      if (!src) src = srcs.pop()
+
+      elements.push(`<img src="${src}" />`)
 
       break
     }
